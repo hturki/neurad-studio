@@ -21,9 +21,12 @@ from time import time
 from typing import Dict, List, Optional, Tuple, Type
 
 import torch
+import torch.nn as nn
 from PIL import Image
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn, TimeElapsedColumn
 from torchmetrics.image.fid import FrechetInceptionDistance
+from torchvision import transforms
+from transformers import AutoImageProcessor, AutoModel
 from torchvision.transforms.functional import to_pil_image, to_tensor
 
 from nerfstudio.data.datamanagers.ad_datamanager import ADDataManager, ADDataManagerConfig
@@ -32,7 +35,24 @@ from nerfstudio.data.datamanagers.parallel_datamanager import ParallelDataManage
 from nerfstudio.models.ad_model import ADModel, ADModelConfig
 from nerfstudio.pipelines.base_pipeline import VanillaPipeline, VanillaPipelineConfig
 from nerfstudio.utils import profiler
+import numpy as np
 
+class DINOFeatureExtractor(nn.Module):
+    """Feature extractor using DINOv2."""
+
+    def __init__(self, device=None):
+        super().__init__()
+        self.processor = AutoImageProcessor.from_pretrained("facebook/dinov2-base")
+        self.model = AutoModel.from_pretrained("facebook/dinov2-base")
+        if device is not None:
+            self.model = self.model.to(device)
+        self.model.eval()
+
+    def forward(self, img):
+        with torch.no_grad():
+            outputs = self.model(torch.from_numpy(np.array(self.processor(img)['pixel_values'])).to(self.model.device))
+            features = outputs.pooler_output
+        return features
 
 @dataclass
 class ADPipelineConfig(VanillaPipelineConfig):
@@ -73,6 +93,7 @@ class ADPipeline(VanillaPipeline):
             self.model.disable_ray_drop()
 
         self.fid = None
+        self.dino_extractor = DINOFeatureExtractor(device=self.device)
 
     @profiler.time_function
     def get_train_loss_dict(self, step: int):
@@ -170,12 +191,12 @@ class ADPipeline(VanillaPipeline):
             transient=True,
         ) as progress:
             lane_shift_fids = (
-                {i: FrechetInceptionDistance().to(self.device) for i in (0, 2, 3)}
+                {i: FrechetInceptionDistance(feature=self.dino_extractor).to(self.device) for i in (0, 2, 3)}
                 if step in self.config.calc_fid_steps or step is None
                 else {}
             )
             vertical_shift_fids = (
-                {i: FrechetInceptionDistance().to(self.device) for i in (1,)}
+                {i: FrechetInceptionDistance(feature=self.dino_extractor).to(self.device) for i in (1,)}
                 if step in self.config.calc_fid_steps or step is None
                 else {}
             )
@@ -185,16 +206,16 @@ class ADPipeline(VanillaPipeline):
                 # "both": [(0.5, 2.0), (-0.5, 2.0), (0.5, -2.0), (-0.5, -2.0)],
             }
             actor_fids = (
-                {k: FrechetInceptionDistance().to(self.device) for k in actor_edits.keys()}
+                {k: FrechetInceptionDistance(feature=self.dino_extractor).to(self.device) for k in actor_edits.keys()}
                 if step in self.config.calc_fid_steps or step is None
                 else {}
             )
             if actor_fids:
-                actor_fids["true"] = FrechetInceptionDistance().to(self.device)
+                actor_fids["true"] = FrechetInceptionDistance(feature=self.dino_extractor).to(self.device)
 
             num_images = len(self.datamanager.fixed_indices_eval_dataloader)
             task = progress.add_task("[green]Evaluating all eval images...", total=num_images)
-            for camera, batch in self.datamanager.fixed_indices_eval_dataloader:
+            for val_idx, (camera, batch) in enumerate(self.datamanager.fixed_indices_eval_dataloader):
                 torch.cuda.synchronize()
                 # time this the following line
                 inner_start = time()
@@ -234,7 +255,7 @@ class ADPipeline(VanillaPipeline):
                     assert camera_indices is not None
                     for key, val in images_dict.items():
                         Image.fromarray((val * 255).byte().cpu().numpy()).save(
-                            output_path / "{0:06d}-{1}.jpg".format(int(camera_indices[0, 0, 0]), key)
+                            output_path / "{0:06d}-{1}.jpg".format(val_idx, key)
                         )
                 # Add timing stuff
                 assert "num_camera_rays_per_sec" not in metrics_dict

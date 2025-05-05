@@ -58,6 +58,7 @@ from nerfstudio.utils.external import TCNN_EXISTS
 from nerfstudio.utils.math import chamfer_distance
 from nerfstudio.utils.printing import print_tcnn_speed_warning
 from nerfstudio.viewer.server.viewer_elements import ViewerSlider
+import point_cloud_utils as pcu
 
 EPS = 1e-7
 
@@ -611,13 +612,19 @@ class NeuRADModel(ADModel):
                 pred_points_did_return = (ray_drop_logits.sigmoid() < 0.5).squeeze(-1)
             else:
                 pred_points_did_return = (pred_depth < self.config.loss.non_return_lidar_distance).squeeze(-1)
+
             if pred_points_did_return.any() and points.shape[0] > 0 and did_return.any():
                 pred_points = outputs["points"][is_lidar][pred_points_did_return]
                 metrics_dict["chamfer_distance"] = float(
+                    pcu.chamfer_distance(pred_points[..., :3].cpu().numpy(), points[did_return, :3].cpu().numpy())
+                )
+                metrics_dict["chamfer_distance_sq"] = float(
                     self.chamfer_distance(pred_points[..., :3], points[did_return, :3])
                 )
+
             else:
-                metrics_dict["chamfer_distance"] = points[did_return, :3].norm(dim=-1).mean()
+                metrics_dict["chamfer_distance"] = points[did_return, :3].norm(dim=-1).sqrt().mean()
+                metrics_dict["chamfer_distance_sq"] = points[did_return, :3].norm(dim=-1).mean()
         return metrics_dict, images_dict
 
     @torch.no_grad()

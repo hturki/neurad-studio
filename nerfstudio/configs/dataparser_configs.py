@@ -38,12 +38,12 @@ dataparsers = {
     "pandaset-data": PandaSetDataParserConfig(),
 }
 
-try:
-    from nerfstudio.data.dataparsers.waymo_dataparser import WoDParserConfig
+# try:
+from nerfstudio.data.dataparsers.wod_dataparser import WoDParserConfig
 
-    dataparsers["wod-data"] = WoDParserConfig()
-except ImportError:
-    CONSOLE.print("Waymo dataparser has missing dependencies, please following installation instructions in README.md")
+dataparsers["wod-data"] = WoDParserConfig()
+# except ImportError:
+#     CONSOLE.print("Waymo dataparser has missing dependencies, please following installation instructions in README.md")
 
 external_dataparsers, _ = discover_dataparsers()
 all_dataparsers = {**dataparsers, **external_dataparsers}

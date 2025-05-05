@@ -571,7 +571,7 @@ class ExportLidar:
 
             pts_lidar = pts_lidar.numpy()
             intensity = pts_lidar[:, 1:2]  # (range, intensity, elongation, x, y, z) => (N, 1)
-            intensity = self._normalize(intensity)  # => [0.0, 1.0]
+            intensity = np.tanh(intensity) #self._normalize(intensity)  # => [0.0, 1.0]
 
             pts_lidar = np.hstack((pts_lidar[:, 3:6], np.ones((pts_lidar.shape[0], 1))))
 

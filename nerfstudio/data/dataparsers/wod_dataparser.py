@@ -62,7 +62,9 @@ class WoDParserConfig(ADDataParserConfig):
     """Change to validation when some sequence is in validation"""
     output_folder: Path = Path("/data/dataset/wod/images")
     """Output saving folder for images, by defaut it will be set with wod dataset path."""
-    train_split_fraction: float = 0.5
+    val_every_n_frames: int = 5
+
+    # train_split_fraction: float = 0.5
     """The percent of images to use for training. The remaining images are for eval."""
     start_frame: int = 0
     """Start frame"""
@@ -287,7 +289,7 @@ class WoD(ADDataParser):
             self.config.dataset_end_fraction == 1.0
         ), f"Wod data parser only support dataset_end_fraction == 1.0, value received {self.config.dataset_end_fraction}"
         self.cameras_ids = [WOD_CAMERA_NAME_2_ID[cam] for cam in self.config.cameras]
-        parquet_dir = str(self.config.data / self.config.parquet_dir)
+        parquet_dir = "../waymo-parquet/training" #str(self.config.data / self.config.parquet_dir)
         self.parquet_reader = ParquetReader(self.config.sequence, dataset_dir=parquet_dir)
         self.select_ts = SelectedTimestamp(self.parquet_reader, self.config.start_frame, self.config.end_frame)
         self.objects_id = ObjectsID(self.parquet_reader, self.select_ts)

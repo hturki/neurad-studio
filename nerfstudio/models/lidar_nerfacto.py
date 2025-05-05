@@ -29,6 +29,8 @@ from nerfstudio.model_components.losses import DepthLossType, depth_loss
 from nerfstudio.model_components.renderers import DepthRenderer
 from nerfstudio.models.ad_model import ADModel, ADModelConfig
 from nerfstudio.models.nerfacto import NerfactoModel, NerfactoModelConfig
+from nerfstudio.utils.math import chamfer_distance
+import point_cloud_utils as pcu
 
 
 @dataclass
@@ -75,6 +77,8 @@ class LidarNerfactoModel(NerfactoModel, ADModel):
         self.renderer_depth = DepthRenderer(method="expected")
 
         self.median_l2 = lambda pred, gt: torch.median((pred - gt) ** 2)
+        self.mean_rel_l2 = lambda pred, gt: torch.mean(((pred - gt) / gt) ** 2)
+        self.chamfer_distance = lambda pred, gt: chamfer_distance(pred, gt, 1_000, True)
 
     def get_outputs(self, ray_bundle: RayBundle):
         outputs = super().get_outputs(ray_bundle)
@@ -124,7 +128,35 @@ class LidarNerfactoModel(NerfactoModel, ADModel):
         if "image" in batch:
             metrics, images = super().get_image_metrics_and_images(outputs, batch)
         if "lidar" in batch:
-            metrics["depth_median_l2"] = float(self.median_l2(outputs["depth"], batch["distance"]))
+            points = batch["lidar"].to(self.device)
+            if "is_lidar" not in batch:
+                batch["is_lidar"] = torch.ones(*batch["lidar"].shape[:-1], 1, dtype=torch.bool, device=self.device)
+            if "did_return" not in batch:
+                batch["did_return"] = torch.ones(*batch["lidar"].shape[:-1], 1, dtype=torch.bool, device=self.device)
+
+            pred_depth = outputs["depth"]
+            did_return = batch["did_return"][:, 0].to(self.device)
+            is_lidar = batch["is_lidar"][:, 0].to(self.device)
+            metrics["depth_median_l2"] = float(
+                self.median_l2(pred_depth[is_lidar][did_return], batch["distance"][did_return])
+            )
+            metrics["depth_mean_rel_l2"] = float(
+                self.mean_rel_l2(pred_depth[is_lidar][did_return], batch["distance"][did_return])
+            )
+            pred_points_did_return = (pred_depth < 150).squeeze(-1)
+            if pred_points_did_return.any() and points.shape[0] > 0 and did_return.any():
+                pred_points = outputs["points"][is_lidar][pred_points_did_return]
+                metrics["chamfer_distance"] = float(
+                    pcu.chamfer_distance(pred_points[..., :3].cpu().numpy(), points[did_return, :3].cpu().numpy())
+                )
+                metrics["chamfer_distance_sq"] = float(
+                    self.chamfer_distance(pred_points[..., :3], points[did_return, :3])
+                )
+            else:
+                metrics["chamfer_distance"] = points[did_return, :3].norm(dim=-1).sqrt().mean()
+                metrics["chamfer_distance_sq"] = points[did_return, :3].norm(dim=-1).mean()
+
+            # metrics["depth_median_l2"] = float(self.median_l2(outputs["depth"], batch["distance"]))
         return metrics, images
 
     def _get_sigma(self):
