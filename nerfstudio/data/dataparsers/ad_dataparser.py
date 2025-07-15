@@ -98,7 +98,7 @@ class ADDataParserConfig(DataParserConfig):
     allow_per_point_times: bool = True
     """Whether to allow per-point times (for sub-frame time correction)."""
 
-    add_missing_points: bool = False
+    add_missing_points: bool = True
     """Whether to add missing points (rays that did not return) to the point clouds."""
     lidar_elevation_mapping: Optional[Dict[str, Dict[int, float]]] = None
     """Elevation mapping for each lidar."""
@@ -347,10 +347,14 @@ class ADDataParser(DataParser):
             for sensor_idx in sensor_idxs.unique():
                 sensor_sample_idxs = (sensor_idxs == sensor_idx).nonzero().squeeze(-1)
                 for si, sensor_sample_idx in enumerate(sensor_sample_idxs):
-                    if (si + 1) % self.config.val_every_n_frames == 0:
+                    if self.config.val_every_n_frames == 0:
+                        train_indices.append(sensor_sample_idx)
                         eval_indices.append(sensor_sample_idx)
                     else:
-                        train_indices.append(sensor_sample_idx)
+                        if (si + 1) % self.config.val_every_n_frames == 0:
+                            eval_indices.append(sensor_sample_idx)
+                        else:
+                            train_indices.append(sensor_sample_idx)
 
                 # split according to train_split_fraction
                 # num_for_train_split = math.ceil(len(sensor_sample_idxs) * self.config.train_split_fraction)

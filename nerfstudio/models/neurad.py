@@ -21,6 +21,7 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
+import timeit
 from typing import Dict, List, Literal, Optional, Tuple, Type, Union
 
 import nerfacc
@@ -318,6 +319,7 @@ class NeuRADModel(ADModel):
     ):
         if self.training or self.config.use_camopt_in_eval:
             self.camera_optimizer.apply_to_raybundle(ray_bundle)
+
         nff_outputs = self.get_nff_outputs(ray_bundle, calc_lidar_losses)
         rgb, intensity, ray_drop_logits = self.decode_features(
             features=nff_outputs["features"],
@@ -625,6 +627,11 @@ class NeuRADModel(ADModel):
             else:
                 metrics_dict["chamfer_distance"] = points[did_return, :3].norm(dim=-1).sqrt().mean()
                 metrics_dict["chamfer_distance_sq"] = points[did_return, :3].norm(dim=-1).mean()
+
+            metrics_dict["lidar_render_time_ms"] = outputs["render_time_ms"]
+        else:
+            metrics_dict["camera_render_time_ms"] = outputs["render_time_ms"]
+
         return metrics_dict, images_dict
 
     @torch.no_grad()
@@ -653,6 +660,32 @@ class NeuRADModel(ADModel):
             camera_ray_bundle = camera_ray_bundle.reshape((-1,))
             is_lidar = None
 
+        outputs = {}
+
+        def timing_test():
+            # Run chunked forward pass through NFF only
+            num_rays_per_chunk = self.config.eval_num_rays_per_chunk
+            num_rays = len(camera_ray_bundle)
+            outputs_lists = defaultdict(list)
+            for i in range(0, num_rays, num_rays_per_chunk):
+                start_idx = i
+                end_idx = i + num_rays_per_chunk
+                ray_bundle = camera_ray_bundle.get_row_major_sliced_ray_bundle(start_idx, end_idx)
+                outputs = self.get_nff_outputs(ray_bundle, calc_lidar_losses=False)
+                for output_name, output in outputs.items():  # type: ignore
+                    outputs_lists[output_name].append(output)
+            for output_name, outputs_list in outputs_lists.items():
+                outputs[output_name] = torch.cat(outputs_list).view(*output_size, -1)  # type: ignore
+
+            features = outputs["features"].view(-1, outputs["features"].shape[-1])
+            rgb, intensity, ray_drop_logit = self.decode_features(
+                features, patch_size=patch_size, is_lidar=is_lidar, intensity_for_cam=True
+            )
+            torch.cuda.synchronize()
+
+        torch.cuda.synchronize()
+        render_time_ms = timeit.timeit(timing_test, number=1) * 1000
+
         # Run chunked forward pass through NFF only
         num_rays_per_chunk = self.config.eval_num_rays_per_chunk
         num_rays = len(camera_ray_bundle)
@@ -664,7 +697,6 @@ class NeuRADModel(ADModel):
             outputs = self.get_nff_outputs(ray_bundle, calc_lidar_losses=False)
             for output_name, output in outputs.items():  # type: ignore
                 outputs_lists[output_name].append(output)
-        outputs = {}
         for output_name, outputs_list in outputs_lists.items():
             outputs[output_name] = torch.cat(outputs_list).view(*output_size, -1)  # type: ignore
 
@@ -672,6 +704,7 @@ class NeuRADModel(ADModel):
         rgb, intensity, ray_drop_logit = self.decode_features(
             features, patch_size=patch_size, is_lidar=is_lidar, intensity_for_cam=True
         )
+
         if rgb is not None:
             outputs["rgb"] = rgb.squeeze(0)
         if intensity is not None:
@@ -679,6 +712,8 @@ class NeuRADModel(ADModel):
         if ray_drop_logit is not None:
             outputs["ray_drop_logits"] = ray_drop_logit.view(*output_size, -1)
             outputs["ray_drop_prob"] = ray_drop_logit.view(*output_size, -1).sigmoid()
+
+        outputs["render_time_ms"] = render_time_ms
         return outputs
 
     def _compute_is_close_to_lidar(self, *all_ray_samples: RaySamples) -> None:

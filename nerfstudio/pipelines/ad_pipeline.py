@@ -190,16 +190,18 @@ class ADPipeline(VanillaPipeline):
             MofNCompleteColumn(),
             transient=True,
         ) as progress:
-            lane_shift_fids = (
-                {i: FrechetInceptionDistance(feature=self.dino_extractor).to(self.device) for i in (0, 2, 3)}
-                if step in self.config.calc_fid_steps or step is None
-                else {}
-            )
-            vertical_shift_fids = (
-                {i: FrechetInceptionDistance(feature=self.dino_extractor).to(self.device) for i in (1,)}
-                if step in self.config.calc_fid_steps or step is None
-                else {}
-            )
+            # lane_shift_fids = (
+            #     {i: FrechetInceptionDistance(feature=self.dino_extractor).to(self.device) for i in (0, 2, 3)}
+            #     if step in self.config.calc_fid_steps or step is None
+            #     else {}
+            # )
+            # vertical_shift_fids = (
+            #     {i: FrechetInceptionDistance(feature=self.dino_extractor).to(self.device) for i in (1,)}
+            #     if step in self.config.calc_fid_steps or step is None
+            #     else {}
+            # )
+            lane_shift_fids = {}
+            vertical_shift_fids = {}
             actor_edits = {
                 "rot": [(0.5, 0), (-0.5, 0)],
                 "trans": [(0, 2.0), (0, -2.0)],
@@ -251,6 +253,7 @@ class ADPipeline(VanillaPipeline):
                         / "{0:06d}.png".format(int(camera_ray_bundle.camera_indices[0, 0, 0]))
                     )
                 if output_path is not None:
+                    print(val_idx, camera_ray_bundle.camera_indices.unique())
                     camera_indices = camera_ray_bundle.camera_indices
                     assert camera_indices is not None
                     for key, val in images_dict.items():
@@ -335,11 +338,14 @@ class ADPipeline(VanillaPipeline):
 
         for key in keys:
             if get_std:
-                key_std, key_mean = torch.std_mean(
-                    torch.tensor([metrics_dict[key] for metrics_dict in metrics_dict_list if key in metrics_dict])
-                )
-                metrics_dict[key] = float(key_mean)
-                metrics_dict[f"{key}_std"] = float(key_std)
+                try:
+                    key_std, key_mean = torch.std_mean(
+                        torch.tensor([metrics_dict[key] for metrics_dict in metrics_dict_list if key in metrics_dict])
+                    )
+                    metrics_dict[key] = float(key_mean)
+                    metrics_dict[f"{key}_std"] = float(key_std)
+                except:
+                    pass
             else:
                 metrics_dict[key] = float(
                     torch.mean(

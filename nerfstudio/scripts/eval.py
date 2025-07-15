@@ -30,6 +30,9 @@ from nerfstudio.engine.trainer import TrainerConfig
 from nerfstudio.utils.eval_utils import eval_setup
 from nerfstudio.utils.rich_utils import CONSOLE
 
+import faulthandler
+import signal
+faulthandler.register(signal.SIGUSR1)
 
 @dataclass
 class ComputePSNR:

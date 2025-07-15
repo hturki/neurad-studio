@@ -20,6 +20,7 @@ Nerfacto augmented with depth supervision.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import timeit
 from typing import Dict, Tuple, Type
 
 import torch
@@ -80,12 +81,26 @@ class LidarNerfactoModel(NerfactoModel, ADModel):
         self.mean_rel_l2 = lambda pred, gt: torch.mean(((pred - gt) / gt) ** 2)
         self.chamfer_distance = lambda pred, gt: chamfer_distance(pred, gt, 1_000, True)
 
+    def get_outputs_timed(self, ray_bundle: RayBundle):
+        return super().get_outputs(ray_bundle)
+
     def get_outputs(self, ray_bundle: RayBundle):
+        x = self
+        if not self.training:
+            def timing_test():
+                _ = x.get_outputs_timed(ray_bundle)
+                torch.cuda.synchronize()
+            torch.cuda.synchronize()
+            ray_time = timeit.timeit(timing_test, number=1)
+
         outputs = super().get_outputs(ray_bundle)
+        if not self.training:
+            outputs["render_time_ms"] = torch.full_like(outputs["depth"], ray_time * 1000 / outputs["depth"].shape[0])
         if ray_bundle.metadata is not None and "directions_norm" in ray_bundle.metadata:
             outputs["directions_norm"] = ray_bundle.metadata["directions_norm"]
         if "is_lidar" in ray_bundle.metadata:
             outputs["rgb"] = outputs["rgb"][~ray_bundle.metadata["is_lidar"][:, 0]]
+
         return outputs
 
     def get_metrics_dict(self, outputs, batch):
@@ -125,6 +140,7 @@ class LidarNerfactoModel(NerfactoModel, ADModel):
         self, outputs: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor]
     ) -> Tuple[Dict[str, float], Dict[str, torch.Tensor]]:
         metrics, images = {}, {}
+
         if "image" in batch:
             metrics, images = super().get_image_metrics_and_images(outputs, batch)
         if "lidar" in batch:
@@ -155,7 +171,9 @@ class LidarNerfactoModel(NerfactoModel, ADModel):
             else:
                 metrics["chamfer_distance"] = points[did_return, :3].norm(dim=-1).sqrt().mean()
                 metrics["chamfer_distance_sq"] = points[did_return, :3].norm(dim=-1).mean()
-
+            metrics["lidar_render_time_ms"] = outputs["render_time_ms"].sum()
+        else:
+            metrics["camera_render_time_ms"] = outputs["render_time_ms"].sum()
             # metrics["depth_median_l2"] = float(self.median_l2(outputs["depth"], batch["distance"]))
         return metrics, images
 
