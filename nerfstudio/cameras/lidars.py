@@ -37,6 +37,7 @@ from nerfstudio.data.utils.lidar_elevation_mappings import (
     VELODYNE_128_ELEVATION_MAPPING,
     VELODYNE_HDL32E_ELEVATION_MAPPING,
     VELODYNE_VLP32C_ELEVATION_MAPPING,
+    WOD64_ELEVATION_MAPPING,
 )
 from nerfstudio.utils.misc import strtobool, torch_compile
 from nerfstudio.utils.tensor_dataclass import TensorDataclass
@@ -601,6 +602,8 @@ def get_lidar_elevation_mapping(lidar_type: LidarType) -> dict:
         return VELODYNE_128_ELEVATION_MAPPING
     elif lidar_type == LidarType.PANDAR64:
         return PANDAR64_ELEVATION_MAPPING
+    elif lidar_type == LidarType.WOD64:
+        return WOD64_ELEVATION_MAPPING
     else:
         raise ValueError(f"Invalid lidar type: {lidar_type}")
 
@@ -618,6 +621,8 @@ def get_lidar_azimuth_resolution(lidar_type: LidarType) -> float:
         return 0.2
     elif lidar_type == LidarType.PANDAR64:
         return 0.2
+    elif lidar_type == LidarType.WOD64:
+        return 0.13584905660377358
     else:
         raise ValueError(f"Invalid lidar type: {lidar_type}")
 
@@ -634,6 +639,8 @@ def get_lidar_relovution_time(lidar_type: LidarType) -> float:
     elif lidar_type == LidarType.VELODYNE128:
         return 0.1
     elif lidar_type == LidarType.PANDAR64:
+        return 0.1
+    elif lidar_type == LidarType.WOD64:
         return 0.1
     else:
         raise ValueError(f"Invalid lidar type: {lidar_type}")
