@@ -91,7 +91,7 @@ def get_mock_timestamps(points: npt.NDArray[np.float32]) -> npt.NDArray[np.float
 
 
 class ParquetReader:
-    def __init__(self, context_name: str, dataset_dir: str = "/data/dataset/wod/training", nb_partitions: int = 120):
+    def __init__(self, context_name: str, dataset_dir: str = "/lustre/fs12/portfolios/nvr/users/rdelutio/data/nre/lidar-3dgut/Waymo/waymo-parquet/training", nb_partitions: int = 120):
         self.context_name = context_name
         self.dataset_dir = dataset_dir
         self.nb_partitions = nb_partitions
@@ -99,6 +99,8 @@ class ParquetReader:
     def read(self, tag: str) -> dd.DataFrame:
         """Creates a Dask DataFrame for the component specified by its tag."""
         paths = glob.glob(f"{self.dataset_dir}/{tag}/{self.context_name}.parquet")
+        print(tag)
+        # import pdb; pdb.set_trace()
         return dd.read_parquet(paths, npartitions=self.nb_partitions)  # type: ignore
 
     def __call__(self, tag: str) -> dd.DataFrame:
