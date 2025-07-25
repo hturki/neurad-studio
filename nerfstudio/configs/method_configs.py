@@ -501,7 +501,7 @@ method_configs["neurad-paper"].pipeline.model.use_temporal_appearance = False  #
 for f in method_configs["neurad-paper"].pipeline.model.fields:  # type: ignore
     f.flip_prob = 0.0
 method_configs["neurad-2x-paper"] = deepcopy(method_configs["neurader"])
-method_configs["neurad-2x-paper"].method_name = "neurad-paper"
+method_configs["neurad-2x-paper"].method_name = "neurad-2x-paper"
 method_configs["neurad-2x-paper"].pipeline.model.use_temporal_appearance = False  # type: ignore
 for f in method_configs["neurad-2x-paper"].pipeline.model.fields:  # type: ignore
     f.flip_prob = 0.0

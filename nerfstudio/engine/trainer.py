@@ -506,8 +506,8 @@ class Trainer:
         # possibly make the checkpoint directory
         if not self.checkpoint_dir.exists():
             self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        if self.checkpoint_saving_tracker.did_degrade(fallback=True):
-            return
+        # if self.checkpoint_saving_tracker.did_degrade(fallback=True):
+        #     return
         self.checkpoint_saving_tracker.reset_latest()  # we only want to save the best once
         # save the checkpoint
         ckpt_path: Path = self.checkpoint_dir / f"step-{step:09d}.ckpt"
@@ -525,6 +525,7 @@ class Trainer:
             },
             ckpt_path,
         )
+
         # possibly delete old checkpoints
         if self.config.save_only_latest_checkpoint:
             # delete everything else in the checkpoint folder

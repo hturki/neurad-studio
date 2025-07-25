@@ -658,6 +658,9 @@ class SplatADModel(ADModel):
             boxes2world, exists_at_time = self.dynamic_actors.get_boxes2world(current_time.unsqueeze(-1), flatten=False)
             boxes2world = boxes2world.squeeze(0)
             exists_at_time = exists_at_time.squeeze(0)
+            if boxes2world.shape[0] != num_actors:
+                boxes2world = boxes2world.unsqueeze(0)
+                exists_at_time = exists_at_time.unsqueeze(0)
             assert boxes2world.shape[0] == num_actors
             for actor_idx in range(num_actors):
                 if exists_at_time[actor_idx]:
