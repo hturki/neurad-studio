@@ -389,7 +389,7 @@ class PandaSet(ADDataParser):
         return _cuboids_to_trajectories(cuboids)
 
     def _generate_dataparser_outputs(self, split="train") -> DataparserOutputs:
-        pandaset = DataSet(str(self.config.data.absolute()))
+        pandaset = DataSet(str(Path("/lustre/fsw/portfolios/nvr/users/hturki/pandaset/pandaset").absolute()))#self.config.data.absolute()))
 
         if self.config.sequence not in pandaset.sequences():
             raise ValueError(f"Sequence {self.config.sequence} not found in {self.config.data}")

@@ -623,7 +623,6 @@ class NeuRADModel(ADModel):
                 metrics_dict["chamfer_distance_sq"] = float(
                     self.chamfer_distance(pred_points[..., :3], points[did_return, :3])
                 )
-
             else:
                 metrics_dict["chamfer_distance"] = points[did_return, :3].norm(dim=-1).sqrt().mean()
                 metrics_dict["chamfer_distance_sq"] = points[did_return, :3].norm(dim=-1).mean()

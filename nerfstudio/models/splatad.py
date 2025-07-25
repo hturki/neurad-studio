@@ -57,6 +57,8 @@ from nerfstudio.utils.math import chamfer_distance
 from nerfstudio.utils.poses import inverse as pose_inverse, to4x4
 from nerfstudio.viewer.viewer_elements import ViewerSlider
 
+import point_cloud_utils as pcu
+
 try:
     from gsplat.rendering import lidar_rasterization, rasterization
 except ImportError:
@@ -1502,12 +1504,14 @@ class SplatADModel(ADModel):
             )
 
             if pred["point_cloud"].shape[0] > 0 and gt["point_cloud"].shape[0] > 0:
-                metrics_dict["chamfer_distance"] = float(self.chamfer_distance(pred["point_cloud"], gt["point_cloud"]))
+                metrics_dict["chamfer_distance_sq"] = float(self.chamfer_distance(pred["point_cloud"].detach(), gt["point_cloud"].detach()))
+                metrics_dict["chamfer_distance"] = pcu.chamfer_distance(pred["point_cloud"].detach().cpu().numpy(), gt["point_cloud"].detach().cpu().numpy())
 
             if pred["median_point_cloud"].shape[0] > 0 and gt["point_cloud"].shape[0] > 0:
-                metrics_dict["median_chamfer_distance"] = float(
-                    self.chamfer_distance(pred["median_point_cloud"], gt["point_cloud"])
+                metrics_dict["median_chamfer_distance_sq"] = float(
+                    self.chamfer_distance(pred["median_point_cloud"].detach(), gt["point_cloud"].detach())
                 )
+                metrics_dict["median_chamfer_distance"] = pcu.chamfer_distance(pred["median_point_cloud"].detach().cpu().numpy(), gt["point_cloud"].detach().cpu().numpy())
 
         return metrics_dict, images_dict
 
